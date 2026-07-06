@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ACLClouds MC账号 专用续期脚本 (SeleniumBase UC 模式终极版)
+ACLClouds MC账号 专用续期脚本 (SeleniumBase UC 模式 + 强抗断联版)
 - 启用 UC 模式 (Undetected ChromeDriver) 抹除底层自动化指纹
-- 引入 3.5~5 秒的人类思考时间伪装，绕过时间差风控
-- 取消网络并发请求，交还网页自然发包，通过 UI 实质刷新判定结果
+- 引入 fetch_api 断线自动重连机制，免疫 Cloudflare bypass 期间的 CDP 掉线
+- 引入智能等待，杜绝固定 sleep 导致的偶发性 Connection refused
 """
 
 import os
@@ -88,17 +88,31 @@ def fmt_remaining(days: float) -> str:
     h, m = divmod(int(days * 24 * 60), 60)
     return f"{h}h {m}min" if m else f"{h}h"
 
-# ── API 接口调用 (使用纯 Python Requests 以隔离 UI 干扰) ──────────────────
+# ── API 接口调用 ─────────────────────────────────────────
 def fetch_api(sb, endpoint: str, method="GET", body=None):
     url = f"{BASE_URL}{endpoint}"
-    cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
-    xsrf = cookies_dict.get('XSRF-TOKEN', '')
     
+    # 增加重试机制，免疫 UC 模式绕过 Cloudflare 时的临时底层断联
+    cookies_dict = {}
+    xsrf = ''
+    user_agent = ''
+    
+    for attempt in range(5):
+        try:
+            cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
+            xsrf = cookies_dict.get('XSRF-TOKEN', '')
+            user_agent = sb.driver.execute_script("return navigator.userAgent;")
+            break
+        except Exception as e:
+            if attempt == 4:
+                raise Exception(f"多次尝试连接底层浏览器失败，可能浏览器已被盾拦截挂起或崩溃: {e}")
+            time.sleep(3)
+            
     from urllib.parse import unquote
     headers = {
         'Accept': 'application/json',
         'X-XSRF-TOKEN': unquote(xsrf),
-        'User-Agent': sb.driver.execute_script("return navigator.userAgent;")
+        'User-Agent': user_agent
     }
     
     proxies = None
@@ -146,9 +160,8 @@ def run():
 
     renewed_list, offline_list, skipped_list, failed_list = [], [], [], []
 
-    # 启用 UC 模式 (Undetected ChromeDriver)，如果在 Linux 上运行则必须开启 xvfb
-    with SB(uc=True, xvfb=True, proxy=PROXY_SERVER, locale_code="en-US") as sb:
-        
+    # 追加 disable_gpu=True 以提高 Linux 服务器 Xvfb 环境的稳定性
+    with SB(uc=True, xvfb=True, proxy=PROXY_SERVER, locale_code="en-US", disable_gpu=True) as sb:
         try:
             login_success = False
             if MC_COOKIE:
@@ -188,7 +201,6 @@ def run():
                     except: pass
                     
                     try:
-                        # 循环检测文本变化，比单一选择器更稳定
                         for _ in range(30):
                             if "Verified" in sb.get_text("div.auth-captcha-box") or "verified" in sb.get_text("div.auth-captcha-box"):
                                 log("captcha 验证通过 ✅")
@@ -211,7 +223,12 @@ def run():
             target_url = f"{BASE_URL}/projects"
             if sb.get_current_url() != target_url:
                 sb.open(target_url)
-                sb.sleep(3)
+                
+                # 核心修复：舍弃固定 sleep，采用最高 25 秒智能等待，彻底等 Cloudflare 盾消散且驱动重连
+                try:
+                    sb.wait_for_element_visible(".client-card, a:contains('My services'), .sidebar", timeout=25)
+                except:
+                    sb.sleep(5)
 
             res = fetch_api(sb, "/api/client")
             if res['status'] != 200:
@@ -355,7 +372,6 @@ def run():
                             sb.sleep(0.5)
                             
                         if not state_changed:
-                            # 捕获可能的遗留前台报错
                             page_text = sb.get_text("body")
                             if "Trop de tentatives" in page_text or "Too many" in page_text:
                                 raise Exception("前端抛出风控频率限制报错 (429)。")
