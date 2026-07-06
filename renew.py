@@ -161,7 +161,7 @@ def run():
     renewed_list, offline_list, skipped_list, failed_list = [], [], [], []
 
     # 追加 disable_gpu=True 以提高 Linux 服务器 Xvfb 环境的稳定性
-    with SB(uc=True, xvfb=True, proxy=PROXY_SERVER, locale_code="en-US") as sb:
+    with SB(uc=True, xvfb=True, proxy=PROXY_SERVER, locale_code="en-US", chromium_arg="--disable-gpu,--disable-dev-shm-usage,--no-sandbox") as sb:
         try:
             login_success = False
             if MC_COOKIE:
