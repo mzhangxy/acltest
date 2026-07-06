@@ -98,19 +98,19 @@ def fetch_api(sb, endpoint: str, method="GET", body=None):
     user_agent = ''
     
     for attempt in range(5):
-    try:
-        cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
-        xsrf = cookies_dict.get('XSRF-TOKEN', '')
-        user_agent = sb.driver.execute_script("return navigator.userAgent;")
-        break
-    except Exception as e:
-        if attempt == 4:
-            raise Exception(f"多次尝试连接底层浏览器失败，可能浏览器已被盾拦截挂起或崩溃: {e}")
-        log_warn(f"  驱动连接异常 (第{attempt+1}次)，尝试重连: {e}")
         try:
-            sb.reconnect(3)  # ← 新增：驱动断联时主动重连
-        except Exception:
-            time.sleep(3)
+            cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
+            xsrf = cookies_dict.get('XSRF-TOKEN', '')
+            user_agent = sb.driver.execute_script("return navigator.userAgent;")
+            break
+        except Exception as e:
+            if attempt == 4:
+                raise Exception(f"多次尝试连接底层浏览器失败，可能浏览器已被盾拦截挂起或崩溃: {e}")
+            log_warn(f"  驱动连接异常 (第{attempt+1}次)，尝试重连: {e}")
+            try:
+                sb.reconnect(3)  # ← 新增：驱动断联时主动重连
+            except Exception:
+                time.sleep(3)
             
     from urllib.parse import unquote
     headers = {
