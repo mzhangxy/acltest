@@ -98,14 +98,18 @@ def fetch_api(sb, endpoint: str, method="GET", body=None):
     user_agent = ''
     
     for attempt in range(5):
+    try:
+        cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
+        xsrf = cookies_dict.get('XSRF-TOKEN', '')
+        user_agent = sb.driver.execute_script("return navigator.userAgent;")
+        break
+    except Exception as e:
+        if attempt == 4:
+            raise Exception(f"多次尝试连接底层浏览器失败，可能浏览器已被盾拦截挂起或崩溃: {e}")
+        log_warn(f"  驱动连接异常 (第{attempt+1}次)，尝试重连: {e}")
         try:
-            cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
-            xsrf = cookies_dict.get('XSRF-TOKEN', '')
-            user_agent = sb.driver.execute_script("return navigator.userAgent;")
-            break
-        except Exception as e:
-            if attempt == 4:
-                raise Exception(f"多次尝试连接底层浏览器失败，可能浏览器已被盾拦截挂起或崩溃: {e}")
+            sb.reconnect(3)  # ← 新增：驱动断联时主动重连
+        except Exception:
             time.sleep(3)
             
     from urllib.parse import unquote
@@ -180,7 +184,7 @@ def run():
                             sb.driver.add_cookie({"name": k.strip(), "value": v.strip(), "domain": "dash.aclclouds.com", "path": "/"})
                 
                 sb.open(BASE_URL)
-                sb.sleep(3)
+                sb.reconnect(3)  # UC 模式穿越 Cloudflare 后必须重连驱动
                 if "login" not in sb.get_current_url():
                     log(f"✅ Cookie 登录成功!")
                     login_success = True
@@ -223,12 +227,11 @@ def run():
             target_url = f"{BASE_URL}/projects"
             if sb.get_current_url() != target_url:
                 sb.open(target_url)
-                
-                # 核心修复：舍弃固定 sleep，采用最高 25 秒智能等待，彻底等 Cloudflare 盾消散且驱动重连
+                sb.reconnect(5)  # ← 核心修复：UC 模式跳转后重连，防止 Cloudflare 重启导致驱动断联
                 try:
-                    sb.wait_for_element_visible(".client-card, a:contains('My services'), .sidebar", timeout=25)
+                    sb.wait_for_element_visible(".client-card, a:contains('My services'), .sidebar", timeout=20)
                 except:
-                    sb.sleep(5)
+                    sb.sleep(3)
 
             res = fetch_api(sb, "/api/client")
             if res['status'] != 200:
