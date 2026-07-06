@@ -58,7 +58,7 @@ jobs:
           if [ -n "${{ secrets.V2RAY_CONFIG }}" ]; then
             export MC_PROXY="socks5://127.0.0.1:10808"
           fi
-          python ACL_MC_renew.py 2>&1 | tee renew_accountmc.log
+          python renew.py 2>&1 | tee renew_accountmc.log
 
       - name: 上传错误截图与调试数据
         if: always()  
