@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+ACLClouds MC账号 专用续期脚本 (SeleniumBase UC 模式终极版)
+- 启用 UC 模式 (Undetected ChromeDriver) 抹除底层自动化指纹
+- 引入 3.5~5 秒的人类思考时间伪装，绕过时间差风控
+- 取消网络并发请求，交还网页自然发包，通过 UI 实质刷新判定结果
+"""
+
 import os
 import re
 import sys
@@ -81,7 +88,7 @@ def fmt_remaining(days: float) -> str:
     h, m = divmod(int(days * 24 * 60), 60)
     return f"{h}h {m}min" if m else f"{h}h"
 
-# ── API 接口调用 (使用纯 Python Requests) ──────────────────
+# ── API 接口调用 (使用纯 Python Requests 以隔离 UI 干扰) ──────────────────
 def fetch_api(sb, endpoint: str, method="GET", body=None):
     url = f"{BASE_URL}{endpoint}"
     cookies_dict = {c['name']: c['value'] for c in sb.driver.get_cookies()}
