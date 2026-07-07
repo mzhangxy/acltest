@@ -1,4 +1,4 @@
-name: ACLClouds MC续期
+name: ACLClouds MC Renew
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   renew:
-    name: MC续期
+    name: mc-renew
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -17,6 +17,16 @@ jobs:
     steps:
       - name: 拉取仓库
         uses: actions/checkout@v4
+      
+      - name: 📥 下载私库脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/aclmc-renew-private
+          token: ${{ secrets.PAT_TOKEN }}
+          path: private
+
+      - name: 📂 移动脚本到工作目录
+        run: mv -f private/renew.py renew.py
       
       - name: 安装 Python
         uses: actions/setup-python@v5
