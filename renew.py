@@ -274,8 +274,32 @@ def run():
                         
                         btn_text = sb.get_text(btn_xpath).strip() or "续期/激活"
                         is_activation = "activ" in btn_text.lower()
+                        
+                        # 修改后：
                         log(f"  发现并点击 [{btn_text}] 按钮...")
-                        sb.click(btn_xpath)
+                        
+                        # 先尝试关闭 AppInstallPrompt 遮挡弹窗
+                        try:
+                            prompt_close_selectors = [
+                                "button.AppInstallPrompt__ActionBtn-sc-1iuwobz-7",
+                                "button[class*='AppInstallPrompt']",
+                                "button[class*='InstallPrompt']",
+                            ]
+                            for sel in prompt_close_selectors:
+                                if sb.is_element_visible(sel):
+                                    sb.click(sel)
+                                    log("  已关闭 AppInstallPrompt 遮挡弹窗")
+                                    sb.sleep(0.5)
+                                    break
+                        except Exception:
+                            pass
+                        
+                        # 优先用 JS 点击，彻底绕过任何遮挡元素
+                        try:
+                            btn_el = sb.find_element(btn_xpath)
+                            sb.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", btn_el)
+                        except Exception:
+                            sb.click(btn_xpath)  # 降级为普通点击
                         
                         log("  等待服务器下发验证码挑战...")
                         need_captcha = False
